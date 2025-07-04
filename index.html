@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ORACLE: Campaign Predictor</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -146,6 +148,87 @@
             font-weight: 700;
             color: #fff;
         }
+        
+        /* Performance Analysis Drawer */
+        .analysis-drawer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: #111827;
+            border-top: 1px solid #374151;
+            padding: 2rem;
+            transform: translateY(100%);
+            visibility: hidden;
+            transition: transform 0.3s ease-in-out, visibility 0.3s;
+            z-index: 40;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .analysis-drawer.is-open {
+            transform: translateY(0);
+            visibility: visible;
+        }
+        .analysis-input {
+             background-color: #374151;
+             border: 1px solid #4B5563;
+             color: #F9FAFB;
+             border-radius: 0.375rem;
+             padding: 0.5rem;
+             width: 100%;
+        }
+        .variance {
+            font-weight: 600;
+            font-size: 0.875rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+        }
+        .variance-positive {
+            background-color: #10B981; /* Green-500 */
+            color: #064E3B; /* Green-900 */
+        }
+        .variance-negative {
+            background-color: #F87171; /* Red-400 */
+            color: #7F1D1D; /* Red-900 */
+        }
+        .performance-meter {
+            height: 1.5rem;
+            background: linear-gradient(to right, #ef4444, #f59e0b, #10b981);
+            border-radius: 0.375rem;
+            position: relative;
+            border: 2px solid #4B5563;
+        }
+        .meter-pointer {
+            position: absolute;
+            top: -4px;
+            bottom: -4px;
+            width: 4px;
+            background-color: white;
+            border-radius: 2px;
+            transform: translateX(-2px);
+            transition: left 0.5s ease-in-out;
+        }
+        /* Floating Action Button */
+        .fab {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 4rem;
+            height: 4rem;
+            background-color: #4f46e5;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            cursor: pointer;
+            z-index: 45;
+            transition: transform 0.2s ease-in-out, background-color 0.2s;
+        }
+        .fab:hover {
+            background-color: #4338ca;
+            transform: scale(1.1);
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white p-4 sm:p-6 md:p-8">
@@ -158,7 +241,7 @@
                     <p class="text-lg text-gray-400 mt-2">Optimized Real-time Ads Conversion Level Estimator</p>
                 </div>
                 <button id="exportButton" class="action-button">
-                    Export to Sheets (CSV)
+                    Export Predictions (CSV)
                 </button>
             </div>
         </header>
@@ -181,173 +264,273 @@
             </div>
         </div>
         
-        <!-- Budget Recommendation Section -->
-        <div class="mb-8">
-             <h2 class="text-2xl font-bold text-white mb-4 text-center">Budget Recommendations</h2>
-             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div class="metric-card recommendation-card">
-                    <p class="metric-title flex items-center gap-1.5">Recommended MOFU Budget
-                         <span class="info-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                            <span class="tooltip">A suggested budget to reach your MOFU audience with an effective ad frequency. Calculated as (Predicted Spend x Target Frequency).</span>
-                        </span>
-                    </p>
-                    <p id="recommendedMofuBudget" class="recommendation-value">$0</p>
-                </div>
-                 <div class="metric-card recommendation-card">
-                    <p class="metric-title flex items-center gap-1.5">Recommended BOFU Budget
-                        <span class="info-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                            <span class="tooltip">A suggested budget to reach your BOFU audience with an effective ad frequency. Calculated as (Predicted Spend x Target Frequency).</span>
-                        </span>
-                    </p>
-                    <p id="recommendedBofuBudget" class="recommendation-value">$0</p>
-                </div>
-             </div>
-        </div>
+        <!-- Master content container to enforce vertical stacking -->
+        <div class="flex flex-col gap-8">
+            <!-- Section 1: Budget Recommendation -->
+            <div>
+                 <h2 class="text-2xl font-bold text-white mb-4 text-center">Budget Recommendations</h2>
+                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="metric-card recommendation-card">
+                        <p class="metric-title flex items-center gap-1.5">Recommended MOFU Budget
+                             <span class="info-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                <span class="tooltip">A suggested budget to reach your MOFU audience with an effective ad frequency. Calculated as (Predicted Spend x Target Frequency).</span>
+                            </span>
+                        </p>
+                        <p id="recommendedMofuBudget" class="recommendation-value">$0</p>
+                    </div>
+                     <div class="metric-card recommendation-card">
+                        <p class="metric-title flex items-center gap-1.5">Recommended BOFU Budget
+                            <span class="info-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                <span class="tooltip">A suggested budget to reach your BOFU audience with an effective ad frequency. Calculated as (Predicted Spend x Target Frequency).</span>
+                            </span>
+                        </p>
+                        <p id="recommendedBofuBudget" class="recommendation-value">$0</p>
+                    </div>
+                 </div>
+            </div>
 
-
-        <!-- Main Grid for Predictions and Metrics -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            <!-- Predictions Column -->
-            <div class="lg:col-span-2 space-y-8">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div class="metric-card">
-                        <h2 class="funnel-stage-title">TOFU</h2>
-                        <div class="space-y-4">
-                            <div>
-                                <p class="metric-title flex items-center gap-1.5">Accounts Reached 
-                                    <span class="info-icon">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                        <span class="tooltip">The estimated number of unique people who will see your ads at this stage.</span>
-                                    </span>
-                                </p><p id="tofu-reach" class="highlight">0</p>
+            <!-- Section 2: Main Grid for Predictions and Metrics -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                
+                <!-- Predictions Column -->
+                <div class="lg:col-span-2 space-y-8">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div class="metric-card">
+                            <h2 class="funnel-stage-title">TOFU</h2>
+                            <div class="space-y-4">
+                                <div>
+                                    <p class="metric-title flex items-center gap-1.5">Accounts Reached 
+                                        <span class="info-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                            <span class="tooltip">The estimated number of unique people who will see your ads at this stage.</span>
+                                        </span>
+                                    </p><p id="tofu-reach" class="highlight">0</p>
+                                </div>
+                                <div>
+                                    <p class="metric-title flex items-center gap-1.5">Predicted Clicks
+                                        <span class="info-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                            <span class="tooltip">The estimated number of clicks based on the reach and historical CTR.</span>
+                                        </span>
+                                    </p><p id="tofu-clicks" class="prediction-value">0</p>
+                                </div>
+                                <div>
+                                    <p class="metric-title flex items-center gap-1.5">Predicted CTR
+                                        <span class="info-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                            <span class="tooltip">Click-Through Rate. The percentage of people who see your ad and click it. Based on your historical KPIs.</span>
+                                        </span>
+                                    </p><p id="tofu-ctr" class="prediction-value">0.00%</p>
+                                </div>
                             </div>
-                            <div>
-                                <p class="metric-title flex items-center gap-1.5">Predicted Clicks
-                                    <span class="info-icon">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                        <span class="tooltip">The estimated number of clicks based on the reach and historical CTR.</span>
-                                    </span>
-                                </p><p id="tofu-clicks" class="prediction-value">0</p>
+                        </div>
+                        <div class="metric-card">
+                            <h2 class="funnel-stage-title">MOFU</h2>
+                            <div class="space-y-4">
+                                <div>
+                                    <p class="metric-title flex items-center gap-1.5">Retargeting Pool
+                                         <span class="info-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                            <span class="tooltip">The total audience available for this stage, based on the number of people reached in the previous stage.</span>
+                                        </span>
+                                    </p><p id="mofu-pool" class="prediction-value">0</p>
+                                </div>
+                                <div>
+                                    <p class="metric-title flex items-center gap-1.5">Accounts Reached
+                                         <span class="info-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                            <span class="tooltip">The estimated number of people reached from the retargeting pool, based on your historical retention rate.</span>
+                                        </span>
+                                    </p><p id="mofu-reach" class="highlight">0</p>
+                                </div>
+                                <div>
+                                    <p class="metric-title flex items-center gap-1.5">Predicted Clicks
+                                         <span class="info-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                            <span class="tooltip">The estimated number of clicks based on the reach and historical CTR for this stage.</span>
+                                        </span>
+                                    </p><p id="mofu-clicks" class="prediction-value">0</p>
+                                </div>
+                                <div>
+                                    <p class="metric-title flex items-center gap-1.5">Predicted Spend (Baseline)
+                                         <span class="info-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                            <span class="tooltip">This is a cost forecast, NOT a budget. It's the estimated cost to reach this audience at a low frequency (~1). Use the 'Recommended Budget' above for planning.</span>
+                                        </span>
+                                    </p><p id="mofu-spend" class="prediction-value font-bold">$0</p>
+                                </div>
                             </div>
-                            <div>
-                                <p class="metric-title flex items-center gap-1.5">Predicted CTR
-                                    <span class="info-icon">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                        <span class="tooltip">Click-Through Rate. The percentage of people who see your ad and click it. Based on your historical KPIs.</span>
-                                    </span>
-                                </p><p id="tofu-ctr" class="prediction-value">0.00%</p>
+                        </div>
+                        <div class="metric-card">
+                            <h2 class="funnel-stage-title">BOFU</h2>
+                            <div class="space-y-4">
+                                <div>
+                                    <p class="metric-title flex items-center gap-1.5">Retargeting Pool
+                                         <span class="info-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                            <span class="tooltip">The total audience available for this stage, based on the number of people reached in the previous stage.</span>
+                                        </span>
+                                    </p><p id="bofu-pool" class="prediction-value">0</p>
+                                </div>
+                                <div>
+                                    <p class="metric-title flex items-center gap-1.5">Accounts Reached
+                                         <span class="info-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                            <span class="tooltip">The estimated number of people reached from the retargeting pool, based on your historical retention rate.</span>
+                                        </span>
+                                    </p><p id="bofu-reach" class="highlight">0</p>
+                                </div>
+                                <div>
+                                    <p class="metric-title flex items-center gap-1.5">Predicted Clicks
+                                         <span class="info-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                            <span class="tooltip">The estimated number of clicks based on the reach and historical CTR for this stage.</span>
+                                        </span>
+                                    </p><p id="bofu-clicks" class="prediction-value">0</p>
+                                </div>
+                                <div>
+                                    <p class="metric-title flex items-center gap-1.5">Predicted Spend (Baseline)
+                                         <span class="info-icon">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                                            <span class="tooltip">This is a cost forecast, NOT a budget. It's the estimated cost to reach this audience at a low frequency (~1). Use the 'Recommended Budget' above for planning.</span>
+                                        </span>
+                                    </p><p id="bofu-spend" class="prediction-value font-bold">$0</p>
+                                </div>
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Historical Metrics Column -->
+                <div class="space-y-6">
                     <div class="metric-card">
-                        <h2 class="funnel-stage-title">MOFU</h2>
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-semibold text-white">Historical KPIs</h3>
+                            <button id="editKpisButton" class="icon-button" title="Edit KPIs">
+                                <span class="tooltip">Edit the underlying metrics for the current scenario.</span>
+                                <span class="text-2xl">🔮</span>
+                            </button>
+                        </div>
                         <div class="space-y-4">
-                            <div>
-                                <p class="metric-title flex items-center gap-1.5">Retargeting Pool
-                                     <span class="info-icon">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                        <span class="tooltip">The total audience available for this stage, based on the number of people reached in the previous stage.</span>
-                                    </span>
-                                </p><p id="mofu-pool" class="prediction-value">0</p>
-                            </div>
-                            <div>
-                                <p class="metric-title flex items-center gap-1.5">Accounts Reached
-                                     <span class="info-icon">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                        <span class="tooltip">The estimated number of people reached from the retargeting pool, based on your historical retention rate.</span>
-                                    </span>
-                                </p><p id="mofu-reach" class="highlight">0</p>
-                            </div>
-                            <div>
-                                <p class="metric-title flex items-center gap-1.5">Predicted Clicks
-                                     <span class="info-icon">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                        <span class="tooltip">The estimated number of clicks based on the reach and historical CTR for this stage.</span>
-                                    </span>
-                                </p><p id="mofu-clicks" class="prediction-value">0</p>
-                            </div>
-                            <div>
-                                <p class="metric-title flex items-center gap-1.5">Predicted Spend (Baseline)
-                                     <span class="info-icon">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                        <span class="tooltip">This is a cost forecast, NOT a budget. It's the estimated cost to reach this audience at a low frequency (~1). Use the 'Recommended Budget' above for planning.</span>
-                                    </span>
-                                </p><p id="mofu-spend" class="prediction-value font-bold">$0</p>
-                            </div>
+                            <div><h4 class="font-bold text-indigo-400">TOFU</h4></div>
+                            <div class="flex justify-between items-baseline"><span class="metric-title">Cost per 1k Reach</span><span class="font-semibold" id="tofu-cpm-metric">$0.00</span></div>
+                            <div class="flex justify-between items-baseline"><span class="metric-title">Avg. CTR</span><span class="font-semibold" id="tofu-ctr-metric">0.00%</span></div>
+                            <hr class="border-gray-700">
+                            <div><h4 class="font-bold text-indigo-400">MOFU</h4></div>
+                            <div class="flex justify-between items-baseline"><span class="metric-title">Avg. CTR</span><span class="font-semibold" id="mofu-ctr-metric">0.00%</span></div>
+                            <div class="flex justify-between items-baseline"><span class="metric-title">Avg. CPC</span><span class="font-semibold" id="mofu-cpc-metric">$0.00</span></div>
+                            <hr class="border-gray-700">
+                            <div><h4 class="font-bold text-indigo-400">BOFU</h4></div>
+                            <div class="flex justify-between items-baseline"><span class="metric-title">Avg. CTR</span><span class="font-semibold" id="bofu-ctr-metric">0.00%</span></div>
+                            <div class="flex justify-between items-baseline"><span class="metric-title">Avg. CPC</span><span class="font-semibold" id="bofu-cpc-metric">$0.00</span></div>
                         </div>
                     </div>
-                    <div class="metric-card">
-                        <h2 class="funnel-stage-title">BOFU</h2>
+                     <div class="metric-card">
+                        <h3 class="text-xl font-semibold text-white mb-4">Funnel Retention</h3>
                         <div class="space-y-4">
-                            <div>
-                                <p class="metric-title flex items-center gap-1.5">Retargeting Pool
-                                     <span class="info-icon">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                        <span class="tooltip">The total audience available for this stage, based on the number of people reached in the previous stage.</span>
-                                    </span>
-                                </p><p id="bofu-pool" class="prediction-value">0</p>
-                            </div>
-                            <div>
-                                <p class="metric-title flex items-center gap-1.5">Accounts Reached
-                                     <span class="info-icon">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                        <span class="tooltip">The estimated number of people reached from the retargeting pool, based on your historical retention rate.</span>
-                                    </span>
-                                </p><p id="bofu-reach" class="highlight">0</p>
-                            </div>
-                            <div>
-                                <p class="metric-title flex items-center gap-1.5">Predicted Clicks
-                                     <span class="info-icon">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                        <span class="tooltip">The estimated number of clicks based on the reach and historical CTR for this stage.</span>
-                                    </span>
-                                </p><p id="bofu-clicks" class="prediction-value">0</p>
-                            </div>
-                            <div>
-                                <p class="metric-title flex items-center gap-1.5">Predicted Spend (Baseline)
-                                     <span class="info-icon">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                        <span class="tooltip">This is a cost forecast, NOT a budget. It's the estimated cost to reach this audience at a low frequency (~1). Use the 'Recommended Budget' above for planning.</span>
-                                    </span>
-                                </p><p id="bofu-spend" class="prediction-value font-bold">$0</p>
-                            </div>
+                             <div class="flex justify-between items-baseline"><span class="metric-title">TOFU → MOFU Reach</span><span class="font-semibold" id="mofu-retention-metric">0%</span></div>
+                             <div class="flex justify-between items-baseline"><span class="metric-title">MOFU → BOFU Reach</span><span class="font-semibold" id="bofu-retention-metric">0%</span></div>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <!-- Historical Metrics Column -->
-            <div class="space-y-6">
-                <div class="metric-card">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-xl font-semibold text-white">Historical KPIs</h3>
-                        <button id="editKpisButton" class="icon-button" title="Edit KPIs">
-                            <span class="tooltip">Edit the underlying metrics for the current scenario.</span>
-                            <span class="text-2xl">🔮</span>
-                        </button>
+    <!-- Floating Action Button -->
+    <div id="toggleAnalysisButton" class="fab">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-3.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+        </svg>
+    </div>
+
+    <!-- Performance Analysis Drawer -->
+    <div id="analysis-drawer" class="analysis-drawer">
+        <div class="max-w-5xl mx-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-white">Campaign Performance Analysis</h2>
+                <div class="flex items-center gap-4">
+                    <button id="exportPdfButton" class="action-button bg-green-600 hover:bg-green-700">Export to PDF</button>
+                    <button id="closeAnalysisDrawer" class="text-gray-400 hover:text-white">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+            </div>
+            <p class="text-center text-gray-400 mb-8">Enter actual results to compare against predictions and industry benchmarks.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- TOFU Analysis -->
+                <div class="metric-card space-y-4">
+                    <h3 class="funnel-stage-title">TOFU Analysis</h3>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Actual Reach</label>
+                        <input type="number" id="actual-tofu-reach" class="analysis-input" placeholder="e.g., 90000">
                     </div>
-                    <div class="space-y-4">
-                        <div><h4 class="font-bold text-indigo-400">TOFU</h4></div>
-                        <div class="flex justify-between items-baseline"><span class="metric-title">Cost per 1k Reach</span><span class="font-semibold" id="tofu-cpm-metric">$0.00</span></div>
-                        <div class="flex justify-between items-baseline"><span class="metric-title">Avg. CTR</span><span class="font-semibold" id="tofu-ctr-metric">0.00%</span></div>
-                        <hr class="border-gray-700">
-                        <div><h4 class="font-bold text-indigo-400">MOFU</h4></div>
-                        <div class="flex justify-between items-baseline"><span class="metric-title">Avg. CTR</span><span class="font-semibold" id="mofu-ctr-metric">0.00%</span></div>
-                        <div class="flex justify-between items-baseline"><span class="metric-title">Avg. CPC</span><span class="font-semibold" id="mofu-cpc-metric">$0.00</span></div>
-                        <hr class="border-gray-700">
-                        <div><h4 class="font-bold text-indigo-400">BOFU</h4></div>
-                        <div class="flex justify-between items-baseline"><span class="metric-title">Avg. CTR</span><span class="font-semibold" id="bofu-ctr-metric">0.00%</span></div>
-                        <div class="flex justify-between items-baseline"><span class="metric-title">Avg. CPC</span><span class="font-semibold" id="bofu-cpc-metric">$0.00</span></div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Actual Clicks</label>
+                        <input type="number" id="actual-tofu-clicks" class="analysis-input" placeholder="e.g., 1800">
+                    </div>
+                    <div class="pt-2 space-y-3">
+                        <div class="flex justify-between items-center"><span class="metric-title">Reach vs. Predicted</span><span id="tofu-reach-variance" class="variance">--</span></div>
+                        <div class="flex justify-between items-center"><span class="metric-title">Clicks vs. Predicted</span><span id="tofu-clicks-variance" class="variance">--</span></div>
+                        <hr class="border-gray-600">
+                        <p class="metric-title">CTR Performance vs. Meta Benchmark</p>
+                        <div class="performance-meter"><div id="tofu-ctr-pointer" class="meter-pointer" style="left: 50%;"></div></div>
+                        <div class="grid grid-cols-3 text-xs text-gray-400">
+                            <span class="text-left">Below Avg.</span>
+                            <span class="text-center">Average</span>
+                            <span class="text-right">Above Avg.</span>
+                        </div>
                     </div>
                 </div>
-                 <div class="metric-card">
-                    <h3 class="text-xl font-semibold text-white mb-4">Funnel Retention</h3>
-                    <div class="space-y-4">
-                         <div class="flex justify-between items-baseline"><span class="metric-title">TOFU → MOFU Reach</span><span class="font-semibold" id="mofu-retention-metric">0%</span></div>
-                         <div class="flex justify-between items-baseline"><span class="metric-title">MOFU → BOFU Reach</span><span class="font-semibold" id="bofu-retention-metric">0%</span></div>
+                <!-- MOFU Analysis -->
+                <div class="metric-card space-y-4">
+                    <h3 class="funnel-stage-title">MOFU Analysis</h3>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Actual Reach</label>
+                        <input type="number" id="actual-mofu-reach" class="analysis-input" placeholder="e.g., 65000">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Actual Clicks</label>
+                        <input type="number" id="actual-mofu-clicks" class="analysis-input" placeholder="e.g., 3000">
+                    </div>
+                     <div class="pt-2 space-y-3">
+                        <div class="flex justify-between items-center"><span class="metric-title">Reach vs. Predicted</span><span id="mofu-reach-variance" class="variance">--</span></div>
+                        <div class="flex justify-between items-center"><span class="metric-title">Clicks vs. Predicted</span><span id="mofu-clicks-variance" class="variance">--</span></div>
+                        <hr class="border-gray-600">
+                        <p class="metric-title">CTR Performance vs. Meta Benchmark</p>
+                        <div class="performance-meter"><div id="mofu-ctr-pointer" class="meter-pointer" style="left: 50%;"></div></div>
+                        <div class="grid grid-cols-3 text-xs text-gray-400">
+                            <span class="text-left">Below Avg.</span>
+                            <span class="text-center">Average</span>
+                            <span class="text-right">Above Avg.</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- BOFU Analysis -->
+                <div class="metric-card space-y-4">
+                    <h3 class="funnel-stage-title">BOFU Analysis</h3>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Actual Reach</label>
+                        <input type="number" id="actual-bofu-reach" class="analysis-input" placeholder="e.g., 40000">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Actual Clicks</label>
+                        <input type="number" id="actual-bofu-clicks" class="analysis-input" placeholder="e.g., 2500">
+                    </div>
+                     <div class="pt-2 space-y-3">
+                        <div class="flex justify-between items-center"><span class="metric-title">Reach vs. Predicted</span><span id="bofu-reach-variance" class="variance">--</span></div>
+                        <div class="flex justify-between items-center"><span class="metric-title">Clicks vs. Predicted</span><span id="bofu-clicks-variance" class="variance">--</span></div>
+                        <hr class="border-gray-600">
+                        <p class="metric-title">CTR Performance vs. Meta Benchmark</p>
+                        <div class="performance-meter"><div id="bofu-ctr-pointer" class="meter-pointer" style="left: 50%;"></div></div>
+                        <div class="grid grid-cols-3 text-xs text-gray-400">
+                            <span class="text-left">Below Avg.</span>
+                            <span class="text-center">Average</span>
+                            <span class="text-right">Above Avg.</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -438,12 +621,20 @@
         };
         let activePresetName = "Default";
         let metrics = presets[activePresetName];
+        
+        // Based on recent industry reports for Meta Ads
+        const benchmarks = {
+            tofu_ctr: { low: 0.01, high: 0.025 }, // Avg ~1.75%
+            mofu_ctr: { low: 0.02, high: 0.045 }, // Avg ~3.25%
+            bofu_ctr: { low: 0.03, high: 0.06 }  // Avg ~4.5%
+        };
 
         // --- DOM ELEMENTS ---
         const tofuSpendInput = document.getElementById('tofuSpend');
         const frequencyGoalInput = document.getElementById('frequencyGoal');
         const frequencyValueEl = document.getElementById('frequencyValue');
         const exportButton = document.getElementById('exportButton');
+        const exportPdfButton = document.getElementById('exportPdfButton');
         const editKpisButton = document.getElementById('editKpisButton');
         const kpiModal = document.getElementById('kpiModal');
         const closeModalButton = document.getElementById('closeModalButton');
@@ -460,10 +651,24 @@
         const calcMofuRetentionEl = document.getElementById('calc_mofu_retention');
         const calcBofuRetentionEl = document.getElementById('calc_bofu_retention');
 
+        // Performance Analysis Elements
+        const analysisDrawer = document.getElementById('analysis-drawer');
+        const toggleAnalysisButton = document.getElementById('toggleAnalysisButton');
+        const closeAnalysisDrawer = document.getElementById('closeAnalysisDrawer');
+        const actualInputs = {
+            tofuReach: document.getElementById('actual-tofu-reach'),
+            tofuClicks: document.getElementById('actual-tofu-clicks'),
+            mofuReach: document.getElementById('actual-mofu-reach'),
+            mofuClicks: document.getElementById('actual-mofu-clicks'),
+            bofuReach: document.getElementById('actual-bofu-reach'),
+            bofuClicks: document.getElementById('actual-bofu-clicks'),
+        };
+
         let currentPredictions = {};
         let tempMofuRetention = 0;
         let tempBofuRetention = 0;
         let calculationTimeout;
+        let analysisTimeout;
 
         // --- PRESET & DATA FUNCTIONS ---
         function loadPresets() {
@@ -471,7 +676,6 @@
             if (savedPresets) {
                 try {
                     const parsed = JSON.parse(savedPresets);
-                    // Basic validation to ensure it's an object
                     if (typeof parsed === 'object' && parsed !== null) {
                         presets = parsed;
                     }
@@ -483,9 +687,9 @@
             if (savedActive && presets[savedActive]) {
                 activePresetName = savedActive;
             } else {
-                activePresetName = "Default"; // Fallback to default
+                activePresetName = "Default";
             }
-            metrics = { ...presets[activePresetName] }; // Use a copy for session edits
+            metrics = { ...presets[activePresetName] };
         }
 
         function savePresets() {
@@ -507,17 +711,17 @@
         function switchPreset(name) {
             if (presets[name]) {
                 activePresetName = name;
-                metrics = { ...presets[activePresetName] }; // Load a fresh copy
+                metrics = { ...presets[activePresetName] };
                 savePresets();
                 updateKpiDisplay();
-                onInputChange(); // Use debounced calculation
+                onInputChange();
             }
         }
 
         // --- UI UPDATE FUNCTIONS ---
         function updateKpiDisplay() {
             const currentMetrics = presets[activePresetName];
-            if (!currentMetrics) return; // Guard clause
+            if (!currentMetrics) return;
             
             document.getElementById('tofu-cpm-metric').textContent = `$${currentMetrics.tofu.cost_per_1000_reach.toFixed(2)}`;
             document.getElementById('tofu-ctr-metric').textContent = `${(currentMetrics.tofu.ctr * 100).toFixed(2)}%`;
@@ -530,16 +734,15 @@
         }
 
         function animateValue(element, start, end, duration, formatFn) {
-            // FIX: Add a guard clause to prevent error if the element doesn't exist
             if (!element) {
-                console.error("animateValue called on a null element. Check your element IDs.");
+                console.error("animateValue called on a null element.");
                 return;
             }
             let startTimestamp = null;
             const step = (timestamp) => {
                 if (!startTimestamp) startTimestamp = timestamp;
                 const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-                const easedProgress = progress * (2 - progress); // Ease-out
+                const easedProgress = progress * (2 - progress);
                 const currentValue = start + (end - start) * easedProgress;
                 element.textContent = formatFn(currentValue);
                 if (progress < 1) {
@@ -569,7 +772,7 @@
             const recommendedBofuBudget = bofuSpend * frequencyGoal;
 
             currentPredictions = {
-                tofuSpend, tofuReach, tofuClicks, tofuCtr: metrics.tofu.ctr,
+                tofuReach, tofuClicks, tofuCtr: metrics.tofu.ctr,
                 mofuPool, mofuReach, mofuClicks, mofuCtr: metrics.mofu.ctr, mofuSpend,
                 bofuPool, bofuReach, bofuClicks, bofuCtr: metrics.bofu.ctr, bofuSpend,
                 recommendedMofuBudget, recommendedBofuBudget, frequencyGoal
@@ -581,15 +784,12 @@
             
             animateValue(document.getElementById('tofu-reach'), oldPredictions.tofuReach || 0, tofuReach, 500, format);
             animateValue(document.getElementById('tofu-clicks'), oldPredictions.tofuClicks || 0, tofuClicks, 500, format);
-            
-            // FIX: Add checks to prevent errors if elements are not found
             const tofuCtrEl = document.getElementById('tofu-ctr');
             if (tofuCtrEl) tofuCtrEl.textContent = formatPercent(metrics.tofu.ctr);
             
             animateValue(document.getElementById('mofu-pool'), oldPredictions.mofuPool || 0, mofuPool, 500, format);
             animateValue(document.getElementById('mofu-reach'), oldPredictions.mofuReach || 0, mofuReach, 500, format);
             animateValue(document.getElementById('mofu-clicks'), oldPredictions.mofuClicks || 0, mofuClicks, 500, format);
-            
             const mofuCtrEl = document.getElementById('mofu-ctr');
             if (mofuCtrEl) mofuCtrEl.textContent = formatPercent(metrics.mofu.ctr);
             animateValue(document.getElementById('mofu-spend'), oldPredictions.mofuSpend || 0, mofuSpend, 500, formatCurrency);
@@ -597,15 +797,127 @@
             animateValue(document.getElementById('bofu-pool'), oldPredictions.bofuPool || 0, bofuPool, 500, format);
             animateValue(document.getElementById('bofu-reach'), oldPredictions.bofuReach || 0, bofuReach, 500, format);
             animateValue(document.getElementById('bofu-clicks'), oldPredictions.bofuClicks || 0, bofuClicks, 500, format);
-            
             const bofuCtrEl = document.getElementById('bofu-ctr');
             if (bofuCtrEl) bofuCtrEl.textContent = formatPercent(metrics.bofu.ctr);
             animateValue(document.getElementById('bofu-spend'), oldPredictions.bofuSpend || 0, bofuSpend, 500, formatCurrency);
 
             animateValue(document.getElementById('recommendedMofuBudget'), oldPredictions.recommendedMofuBudget || 0, recommendedMofuBudget, 500, formatCurrency);
             animateValue(document.getElementById('recommendedBofuBudget'), oldPredictions.recommendedBofuBudget || 0, recommendedBofuBudget, 500, formatCurrency);
+            
+            runPerformanceAnalysis();
         }
         
+        // --- PERFORMANCE ANALYSIS & PDF EXPORT ---
+        function calculateVariance(actual, predicted) {
+            if (predicted === 0 && actual > 0) return { value: 100, text: "+∞%", class: 'variance-positive' };
+            if (predicted === 0 && actual === 0) return { value: 0, text: "0%", class: '' };
+            if (actual === 0 && predicted > 0) return { value: -100, text: "-100%", class: 'variance-negative' };
+            if (actual === 0 && predicted === 0) return { value: 0, text: "0%", class: '' };
+
+
+            const variance = ((actual - predicted) / predicted) * 100;
+            const text = `${variance > 0 ? '+' : ''}${variance.toFixed(0)}%`;
+            const cssClass = variance >= 0 ? 'variance-positive' : 'variance-negative';
+            return { value: variance, text: text, class: cssClass };
+        }
+
+        function updateMeter(ctr, benchmark, pointerEl) {
+            if (!pointerEl) return;
+            const range = benchmark.high - benchmark.low;
+            let position = range > 0 ? ((ctr - benchmark.low) / range) * 100 : 50;
+            position = Math.max(0, Math.min(100, position));
+            pointerEl.style.left = `${position}%`;
+        }
+        
+        function runPerformanceAnalysis() {
+            // TOFU
+            const actualTofuReach = parseFloat(actualInputs.tofuReach.value) || 0;
+            const actualTofuClicks = parseFloat(actualInputs.tofuClicks.value) || 0;
+            if (actualTofuReach > 0) {
+                const reachVar = calculateVariance(actualTofuReach, currentPredictions.tofuReach);
+                const clicksVar = calculateVariance(actualTofuClicks, currentPredictions.tofuClicks);
+                const tofuReachVarEl = document.getElementById('tofu-reach-variance');
+                const tofuClicksVarEl = document.getElementById('tofu-clicks-variance');
+
+                tofuReachVarEl.textContent = reachVar.text;
+                tofuReachVarEl.className = `variance ${reachVar.class}`;
+                tofuClicksVarEl.textContent = clicksVar.text;
+                tofuClicksVarEl.className = `variance ${clicksVar.class}`;
+
+                const actualTofuCtr = actualTofuClicks / actualTofuReach;
+                updateMeter(actualTofuCtr, benchmarks.tofu_ctr, document.getElementById('tofu-ctr-pointer'));
+            }
+
+            // MOFU
+            const actualMofuReach = parseFloat(actualInputs.mofuReach.value) || 0;
+            const actualMofuClicks = parseFloat(actualInputs.mofuClicks.value) || 0;
+            if (actualMofuReach > 0) {
+                const reachVar = calculateVariance(actualMofuReach, currentPredictions.mofuReach);
+                const clicksVar = calculateVariance(actualMofuClicks, currentPredictions.mofuClicks);
+                const mofuReachVarEl = document.getElementById('mofu-reach-variance');
+                const mofuClicksVarEl = document.getElementById('mofu-clicks-variance');
+
+                mofuReachVarEl.textContent = reachVar.text;
+                mofuReachVarEl.className = `variance ${reachVar.class}`;
+                mofuClicksVarEl.textContent = clicksVar.text;
+                mofuClicksVarEl.className = `variance ${clicksVar.class}`;
+
+                const actualMofuCtr = actualMofuClicks / actualMofuReach;
+                updateMeter(actualMofuCtr, benchmarks.mofu_ctr, document.getElementById('mofu-ctr-pointer'));
+            }
+
+            // BOFU
+            const actualBofuReach = parseFloat(actualInputs.bofuReach.value) || 0;
+            const actualBofuClicks = parseFloat(actualInputs.bofuClicks.value) || 0;
+            if (actualBofuReach > 0) {
+                const reachVar = calculateVariance(actualBofuReach, currentPredictions.bofuReach);
+                const clicksVar = calculateVariance(actualBofuClicks, currentPredictions.bofuClicks);
+                const bofuReachVarEl = document.getElementById('bofu-reach-variance');
+                const bofuClicksVarEl = document.getElementById('bofu-clicks-variance');
+
+                bofuReachVarEl.textContent = reachVar.text;
+                bofuReachVarEl.className = `variance ${reachVar.class}`;
+                bofuClicksVarEl.textContent = clicksVar.text;
+                bofuClicksVarEl.className = `variance ${clicksVar.class}`;
+
+                const actualBofuCtr = actualBofuClicks / actualBofuReach;
+                updateMeter(actualBofuCtr, benchmarks.bofu_ctr, document.getElementById('bofu-ctr-pointer'));
+            }
+        }
+
+        function exportAnalysisToPdf() {
+            const analysisSection = document.getElementById('analysis-drawer');
+            if (!analysisSection) return;
+
+            const { jsPDF } = window.jspdf;
+            
+            exportPdfButton.textContent = 'Exporting...';
+            exportPdfButton.disabled = true;
+
+            html2canvas(analysisSection, {
+                backgroundColor: '#111827', // Match the section background
+                scale: 2 // Increase resolution for better quality
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF({
+                    orientation: 'landscape', // Use landscape for better fit
+                    unit: 'px',
+                    format: [canvas.width, canvas.height]
+                });
+                pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+                pdf.save('oracle-performance-analysis.pdf');
+                
+                exportPdfButton.textContent = 'Export Analysis to PDF';
+                exportPdfButton.disabled = false;
+            }).catch(err => {
+                console.error("Error exporting to PDF:", err);
+                alert("Sorry, there was an error creating the PDF.");
+                exportPdfButton.textContent = 'Export Analysis to PDF';
+                exportPdfButton.disabled = false;
+            });
+        }
+
+
         // --- MODAL FUNCTIONS ---
         function fillModalInputs(kpiData) {
             document.getElementById('modal_tofu_cpm').value = kpiData.tofu.cost_per_1000_reach;
@@ -657,7 +969,6 @@
 
         function handleApplyForSession() {
             metrics = getMetricsFromModal();
-            // Don't save to presets, just update calculations for this session
             onInputChange();
             closeKpiModal();
         }
@@ -695,7 +1006,7 @@
         }
         
         function exportToCsv() {
-            if (!currentPredictions || Object.keys(currentPredictions).length === 0) {
+             if (!currentPredictions || Object.keys(currentPredictions).length === 0) {
                 alert("No data to export. Please adjust inputs first.");
                 return;
             }
@@ -741,10 +1052,22 @@
             calculationTimeout = setTimeout(calculatePredictions, 250);
         }
 
+        function onAnalysisInputChange() {
+            clearTimeout(analysisTimeout);
+            analysisTimeout = setTimeout(runPerformanceAnalysis, 250);
+        }
+
+        function toggleAnalysisDrawer() {
+            analysisDrawer.classList.toggle('is-open');
+        }
+
+        toggleAnalysisButton.addEventListener('click', toggleAnalysisDrawer);
+        closeAnalysisDrawer.addEventListener('click', toggleAnalysisDrawer);
         tofuSpendInput.addEventListener('input', onInputChange);
         frequencyGoalInput.addEventListener('input', onInputChange);
         
         exportButton.addEventListener('click', exportToCsv);
+        exportPdfButton.addEventListener('click', exportAnalysisToPdf);
         editKpisButton.addEventListener('click', openKpiModal);
         resetKpiChanges.addEventListener('click', () => fillModalInputs(presets[activePresetName]));
         applyForSession.addEventListener('click', handleApplyForSession);
@@ -756,12 +1079,17 @@
         modalPastBofuReach.addEventListener('input', calculateBofuRetention);
         closeModalButton.addEventListener('click', closeKpiModal);
 
+        // Analysis Listeners
+        for (const key in actualInputs) {
+            actualInputs[key].addEventListener('input', onAnalysisInputChange);
+        }
+
         // --- INITIALIZATION ---
         window.onload = () => {
             loadPresets();
             populatePresetDropdown();
             updateKpiDisplay();
-            onInputChange(); // Use debounced calculation on load
+            onInputChange();
         };
     </script>
 </body>
